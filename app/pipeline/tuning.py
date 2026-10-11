@@ -1,8 +1,11 @@
 import time
+
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
-from .models import build_model, MODEL_CANDIDATES
+
+from app.mlops.mlflow_utils import log_training_run, is_enabled
+from app.pipeline.models import build_model, MODEL_CANDIDATES
 
 
 def wape(y_true, y_pred):
@@ -20,9 +23,8 @@ def evaluate(y_true, y_pred):
     }
 
 
-
-def tune_models(X, y):
-    """Evaluate forecasting models using time-series CV, then refit winner."""
+def tune_models(X, y, dataset_key: str | None = None):
+    """Evaluate forecasting models using time-series CV, refit winner, log to MLflow."""
     started = time.perf_counter()
     X = X.copy()
     y = np.asarray(y, dtype=float)
@@ -44,12 +46,8 @@ def tune_models(X, y):
                 pred = model.predict(X.iloc[val_idx])
 
                 fold_wape.append(wape(y[val_idx], pred))
-                fold_mae.append(
-                    mean_absolute_error(y[val_idx], pred)
-                )
-                fold_rmse.append(
-                    np.sqrt(mean_squared_error(y[val_idx], pred))
-                )
+                fold_mae.append(mean_absolute_error(y[val_idx], pred))
+                fold_rmse.append(np.sqrt(mean_squared_error(y[val_idx], pred)))
 
             scores[model_name] = float(np.mean(fold_wape))
             results[model_name] = {
@@ -94,9 +92,28 @@ def tune_models(X, y):
         f"{time.perf_counter() - started:.1f}s"
     )
 
+    # --- MLflow tracking (non-blocking: failures must not break forecasting) ---
+    mlflow_run_id = None
+    if is_enabled():
+        try:
+            mlflow_run_id = log_training_run(
+                dataset_key=dataset_key or "unknown",
+                rows=int(len(X)),
+                feature_count=int(X.shape[1]),
+                results=results,
+                best_name=best_name,
+                best_params=best_params,
+                best_model=fitted_models[best_name],
+                X_train=X,
+                y_train=y,
+            )
+        except Exception as exc:
+            print(f"[MLFLOW] logging failed (non-fatal): {type(exc).__name__}: {exc}")
+
     return {
         "best_model": best_name,
         "best_params": best_params,
         "models": {best_name: fitted_models[best_name]},
         "metrics": results,
+        "mlflow_run_id": mlflow_run_id,
     }

@@ -68,7 +68,9 @@ def prepare_training_data(history):
 
 def train_forecaster(history):
     data, features, X, y, feature_cols = prepare_training_data(history)
-    training = tune_models(X, y)
+    # Stable dataset fingerprint so MLflow can group runs for the same series.
+    dataset_key = _history_key(history)[:16]
+    training = tune_models(X, y, dataset_key=dataset_key)
     best_model_name = training["best_model"]
     best_model = training["models"][best_model_name]
     fitted = best_model.predict(X)
@@ -90,6 +92,8 @@ def train_forecaster(history):
         "lower_error": lower_error,
         "upper_error": upper_error,
         "segment": segment,
+        "dataset_key": dataset_key,
+        "mlflow_run_id": training.get("mlflow_run_id"),
     }
 
 
@@ -197,4 +201,6 @@ def recursive_forecast(history, horizon=30):
         "history": data,
         "frequency": str(freq),
         "rows_used": len(data),
+        "dataset_key": trained.get("dataset_key"),
+        "mlflow_run_id": trained.get("mlflow_run_id"),
     }

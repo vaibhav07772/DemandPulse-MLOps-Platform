@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     allowed_horizons: str = "7,30,60,90"
     max_cached_models: int = 2
 
+    # MLflow
+    mlflow_enabled: bool = True
+    mlflow_tracking_uri: str = "./mlruns"
+    mlflow_experiment_name: str = "demandpulse-forecasting"
+    mlflow_registered_model_name: str = "demandpulse-forecaster"
+    mlflow_auto_register: bool = True
+
     # Paths
     base_dir: Path = Path(__file__).resolve().parent
     data_dir: Path = Path(__file__).resolve().parent.parent / "data"

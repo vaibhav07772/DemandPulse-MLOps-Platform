@@ -7,3 +7,16 @@ venv/
 .vscode/
 *.log
 app/pipeline/model_cache/
+
+.env
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Data
+data/uploads/*
+data/sessions/*
+!data/uploads/.gitkeep
+!data/sessions/.gitkeep

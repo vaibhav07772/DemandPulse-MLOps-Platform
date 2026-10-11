@@ -83,13 +83,14 @@ def tune_models(X, y, dataset_key: str | None = None):
         best_model.fit(X, y)
         fitted_models[best_name] = best_model
 
+    elapsed = time.perf_counter() - started
     print(
         f"[TUNING] best={best_name} "
         f"WAPE={results[best_name]['WAPE']}% | "
         f"MAE={results[best_name]['MAE']} | "
         f"RMSE={results[best_name]['RMSE']} | "
         f"compared={list(scores)} | "
-        f"{time.perf_counter() - started:.1f}s"
+        f"{elapsed:.1f}s"
     )
 
     # --- MLflow tracking (non-blocking: failures must not break forecasting) ---
@@ -109,6 +110,20 @@ def tune_models(X, y, dataset_key: str | None = None):
             )
         except Exception as exc:
             print(f"[MLFLOW] logging failed (non-fatal): {type(exc).__name__}: {exc}")
+
+    # --- Prometheus metrics (non-blocking) ---
+    try:
+        from app.monitoring import metrics as _metrics
+
+        _metrics.model_training_duration_seconds.labels(model=best_name).observe(elapsed)
+        _metrics.model_trainings_total.labels(model=best_name, source="cache_miss").inc()
+        if mlflow_run_id:
+            _metrics.mlflow_runs_total.labels(
+                best_model=best_name,
+                registered=str(is_enabled()).lower(),
+            ).inc()
+    except Exception:
+        pass
 
     return {
         "best_model": best_name,

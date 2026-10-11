@@ -1,9 +1,10 @@
+import time
 import uuid
 from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -12,6 +13,8 @@ from starlette.concurrency import run_in_threadpool
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
 from app.middleware import RequestContextMiddleware
+from app.monitoring import metrics
+from app.monitoring.predictions import log_prediction
 from app.pipeline.data_adapter import adapt_dataset
 from app.pipeline.forecasting import recursive_forecast
 from app.pipeline.inventory import calculate_inventory
@@ -67,6 +70,12 @@ async def home():
     if not html_path.exists():
         raise HTTPException(status_code=500, detail="Dashboard template is missing.")
     return html_path.read_text(encoding="utf-8")
+
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    payload, content_type = metrics.render_metrics()
+    return Response(content=payload, media_type=content_type)
 
 
 @app.get("/health")
@@ -190,6 +199,14 @@ async def upload_dataset(file: UploadFile = File(...)):
         preview = data.head(10).copy()
         preview["date"] = preview["date"].astype(str)
         logger.info("dataset_uploaded", rows=len(data), products=len(products), stores=len(stores))
+
+        # Prometheus metrics
+        try:
+            metrics.uploads_total.labels(status="success").inc()
+            metrics.upload_rows_total.inc(len(data))
+        except Exception:
+            pass
+
         return {
             "success": True,
             "session_id": session_id,
@@ -201,16 +218,26 @@ async def upload_dataset(file: UploadFile = File(...)):
         }
     except HTTPException:
         file_path.unlink(missing_ok=True)
+        try:
+            metrics.uploads_total.labels(status="error").inc()
+        except Exception:
+            pass
         raise
     except Exception as exc:
         logger.exception("dataset_processing_failed")
         file_path.unlink(missing_ok=True)
+        try:
+            metrics.uploads_total.labels(status="error").inc()
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=f"Invalid dataset: {str(exc)}") from exc
 
 
 @app.post("/api/forecast")
 async def forecast(request: ForecastRequest):
     _validate_horizon(request.horizon)
+    forecast_started = time.perf_counter()
+
     try:
         session = get_session(request.session_id)
     except KeyError as exc:
@@ -289,6 +316,48 @@ async def forecast(request: ForecastRequest):
             model=result.get("model"),
         )
 
+        # Prometheus metrics
+        try:
+            metrics.forecast_requests_total.labels(
+                product=str(product),
+                model=str(result.get("model") or "unknown"),
+                status="success",
+            ).inc()
+            metrics.forecast_duration_seconds.labels(
+                horizon=str(request.horizon),
+            ).observe(time.perf_counter() - forecast_started)
+            metrics.forecast_wape.labels(
+                product=str(product),
+                model=str(result.get("model") or "unknown"),
+            ).set(float(result.get("selected_metrics", {}).get("WAPE", 0) or 0))
+            metrics.forecast_horizon_total.labels(
+                product=str(product),
+                horizon=str(request.horizon),
+            ).set(float(forecast_df["forecast"].sum()))
+        except Exception:
+            pass
+
+        # Prediction log (for offline analysis / drift detection)
+        try:
+            log_prediction(
+                {
+                    "product": str(product),
+                    "store": str(store),
+                    "horizon": int(request.horizon),
+                    "model": result.get("model"),
+                    "segment": result.get("segment"),
+                    "wape": float(result.get("selected_metrics", {}).get("WAPE", 0) or 0),
+                    "forecast_total": float(forecast_df["forecast"].sum()),
+                    "avg_forecast": float(forecast_df["forecast"].mean()),
+                    "last_actual": float(history["quantity"].iloc[-1]),
+                    "rows_used": int(result.get("rows_used") or len(history)),
+                    "mlflow_run_id": result.get("mlflow_run_id"),
+                    "dataset_key": result.get("dataset_key"),
+                }
+            )
+        except Exception:
+            logger.exception("prediction_log_write_failed")
+
         return {
             "success": True,
             "product": product,
@@ -308,6 +377,14 @@ async def forecast(request: ForecastRequest):
         raise
     except Exception as exc:
         logger.exception("forecast_failed")
+        try:
+            metrics.forecast_requests_total.labels(
+                product=str(request.product or "unknown"),
+                model="unknown",
+                status="error",
+            ).inc()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=500,
             detail=f"Forecast failed ({type(exc).__name__}). Check server logs for details.",

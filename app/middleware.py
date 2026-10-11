@@ -5,6 +5,8 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from app.monitoring import metrics
+
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -24,11 +26,40 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             logger.exception("request_failed")
+            # Record metric for the failure and re-raise.
+            try:
+                elapsed = time.perf_counter() - start
+                metrics.http_requests_total.labels(
+                    method=request.method,
+                    path=request.url.path,
+                    status="500",
+                ).inc()
+                metrics.http_request_duration_seconds.labels(
+                    method=request.method,
+                    path=request.url.path,
+                ).observe(elapsed)
+            except Exception:
+                pass
             raise
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         response.headers["x-request-id"] = request_id
         response.headers["x-process-time-ms"] = f"{elapsed_ms:.1f}"
+
+        # Prometheus metrics (skip /metrics itself to avoid recursion).
+        if request.url.path != "/metrics":
+            try:
+                metrics.http_requests_total.labels(
+                    method=request.method,
+                    path=request.url.path,
+                    status=str(response.status_code),
+                ).inc()
+                metrics.http_request_duration_seconds.labels(
+                    method=request.method,
+                    path=request.url.path,
+                ).observe(elapsed_ms / 1000.0)
+            except Exception:
+                pass
 
         logger.info(
             "request_completed",

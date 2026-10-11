@@ -6,6 +6,12 @@
   <strong>Forecast demand. Track experiments. Version models. Deploy with confidence.</strong>
 </p>
 
+🌐 **Live Demo:** [demandpulse-mlops.onrender.com](https://demandpulse-mlops.onrender.com/) •
+📘 **API Docs:** [demandpulse-mlops.onrender.com/docs](https://demandpulse-mlops.onrender.com/docs) •
+📊 **Admin Dashboard:** [demandpulse-vaibhav.streamlit.app](https://demandpulse-vaibhav.streamlit.app)
+
+---
+
 <p align="center">
   <a href="https://github.com/vaibhav07772/DemandPulse-MLOps-Platform/actions/workflows/ci.yml">
     <img src="https://github.com/vaibhav07772/DemandPulse-MLOps-Platform/actions/workflows/ci.yml/badge.svg" alt="CI">

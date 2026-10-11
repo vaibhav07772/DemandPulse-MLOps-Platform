@@ -77,3 +77,14 @@ htmlcov/
 # Prediction logs (runtime-generated)
 data/logs/
 !data/logs/.gitkeep
+
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db-journal
+
+# Prediction logs
+data/logs/
+!data/logs/.gitkeep

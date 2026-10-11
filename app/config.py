@@ -28,8 +28,11 @@ class Settings(BaseSettings):
     max_cached_models: int = 2
 
     # MLflow
+    # NOTE: SQLite backend is required for Model Registry support.
+    # File-based ("./mlruns") is tracking-only and fails on Windows.
     mlflow_enabled: bool = True
-    mlflow_tracking_uri: str = "./mlruns"
+    mlflow_tracking_uri: str = "sqlite:///mlflow.db"
+    mlflow_artifact_location: str = "./mlruns"
     mlflow_experiment_name: str = "demandpulse-forecasting"
     mlflow_registered_model_name: str = "demandpulse-forecaster"
     mlflow_auto_register: bool = True

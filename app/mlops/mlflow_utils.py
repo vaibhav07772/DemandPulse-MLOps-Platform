@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -28,6 +29,20 @@ def setup_mlflow() -> None:
 
     settings = get_settings()
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+
+    # Ensure the experiment exists with an explicit artifact location.
+    # Required for SQLite backend — otherwise MLflow defaults to a path
+    # that breaks on Windows (spaces in path, drive letters, etc.).
+    client = mlflow.tracking.MlflowClient()
+    if client.get_experiment_by_name(settings.mlflow_experiment_name) is None:
+        artifact_path = Path(settings.mlflow_artifact_location).resolve()
+        artifact_path.mkdir(parents=True, exist_ok=True)
+        artifact_uri = artifact_path.as_uri()  # proper file:///C:/... URI
+        client.create_experiment(
+            settings.mlflow_experiment_name,
+            artifact_location=artifact_uri,
+        )
+
     mlflow.set_experiment(settings.mlflow_experiment_name)
     logger.info(
         "mlflow_configured",

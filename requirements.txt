@@ -18,3 +18,6 @@ structlog==24.4.0
 mlflow==2.19.0
 prometheus-client==0.21.1
 pandera==0.22.1
+
+streamlit==1.41.1
+plotly==5.24.1

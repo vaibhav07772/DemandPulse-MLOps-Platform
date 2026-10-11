@@ -72,3 +72,8 @@ htmlcov/
 
 # Ruff cache
 .ruff_cache/
+
+
+# Prediction logs (runtime-generated)
+data/logs/
+!data/logs/.gitkeep

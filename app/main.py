@@ -1,6 +1,4 @@
-import logging
 import uuid
-import traceback
 from pathlib import Path
 
 import pandas as pd
@@ -11,27 +9,34 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from app.config import get_settings
+from app.logging_config import configure_logging, get_logger
+from app.middleware import RequestContextMiddleware
 from app.pipeline.data_adapter import adapt_dataset
 from app.pipeline.forecasting import recursive_forecast
 from app.pipeline.inventory import calculate_inventory
 from app.pipeline.segmentation import classify_demand
 from app.services.session_store import create_session, get_session
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("demandpulse")
+# ---- Setup ----
+configure_logging()
+logger = get_logger("demandpulse")
+settings = get_settings()
 
-BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR.parent / "data" / "uploads"
+BASE_DIR = settings.base_dir
+UPLOAD_DIR = settings.upload_dir
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
-ALLOWED_HORIZONS = {7, 30, 60, 90}
+MAX_UPLOAD_BYTES = settings.max_upload_bytes
+ALLOWED_EXTENSIONS = settings.extension_set
+ALLOWED_HORIZONS = settings.horizon_set
 
 app = FastAPI(
-    title="DemandPulse AI",
-    version="1.1.0",
+    title=settings.app_name,
+    version=settings.app_version,
     description="AI Demand Forecasting & Inventory Optimization Platform",
 )
+
+app.add_middleware(RequestContextMiddleware)
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -65,7 +70,30 @@ async def home():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "DemandPulse AI"}
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "environment": settings.environment,
+    }
+
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "alive"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    checks = {
+        "data_dir": settings.data_dir.exists(),
+        "upload_dir": settings.upload_dir.exists(),
+    }
+    ready = all(checks.values())
+    return {
+        "status": "ready" if ready else "not_ready",
+        "checks": checks,
+    }
 
 
 def _validate_horizon(horizon: int):
@@ -165,8 +193,8 @@ async def upload_dataset(file: UploadFile = File(...)):
 
         preview = data.head(10).copy()
         preview["date"] = preview["date"].astype(str)
-        logger.info("Dataset uploaded: rows=%s products=%s stores=%s",
-                    len(data), len(products), len(stores))
+        logger.info("dataset_uploaded",
+                    rows=len(data), products=len(products), stores=len(stores))
         return {
             "success": True,
             "session_id": session_id,
@@ -180,7 +208,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         file_path.unlink(missing_ok=True)
         raise
     except Exception as exc:
-        logger.exception("Dataset processing failed")
+        logger.exception("dataset_processing_failed")
         file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Invalid dataset: {str(exc)}") from exc
 
@@ -220,7 +248,6 @@ async def forecast(request: ForecastRequest):
             .reset_index(drop=True)
         )
 
-        # Aggregate to one row per date when the user selected all stores.
         if history["date"].duplicated().any():
             history = (
                 history.groupby("date", as_index=False)
@@ -237,7 +264,6 @@ async def forecast(request: ForecastRequest):
                 f"Not enough historical data: only {len(history)} time points found."
             )
 
-        # Model fitting/prediction runs outside the ASGI event loop.
         result = await run_in_threadpool(recursive_forecast, history, request.horizon)
         forecast_df = result.get("forecast")
         if not isinstance(forecast_df, pd.DataFrame) or "forecast" not in forecast_df.columns:
@@ -257,6 +283,10 @@ async def forecast(request: ForecastRequest):
         history_rows = history.tail(120).copy()
         history_rows["date"] = history_rows["date"].astype(str)
 
+        logger.info("forecast_completed",
+                    product=product, store=store, horizon=request.horizon,
+                    model=result.get("model"))
+
         return {
             "success": True,
             "product": product,
@@ -275,8 +305,7 @@ async def forecast(request: ForecastRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Forecast request failed")
-        # A genuine server-side model/runtime failure should not be mislabeled as a 400.
+        logger.exception("forecast_failed")
         raise HTTPException(
             status_code=500,
             detail=f"Forecast failed ({type(exc).__name__}). Check server logs for details.",
@@ -310,11 +339,13 @@ async def compare_products(request: CompareRequest):
                     .to_dict(orient="records")
                 ),
             })
+        logger.info("compare_completed",
+                    product1=request.product1, product2=request.product2)
         return {"success": True, "products": results}
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Compare request failed")
+        logger.exception("compare_failed")
         raise HTTPException(
             status_code=500,
             detail=f"Compare failed ({type(exc).__name__}). Check server logs for details.",
@@ -330,7 +361,7 @@ async def insights(session_id: str):
     try:
         return await run_in_threadpool(build_insights, session["data"])
     except Exception as exc:
-        logger.exception("Insights request failed")
+        logger.exception("insights_failed")
         raise HTTPException(status_code=500, detail="Unable to build insights. Check server logs.") from exc
 
 

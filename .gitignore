@@ -88,3 +88,8 @@ mlflow.db-journal
 # Prediction logs
 data/logs/
 !data/logs/.gitkeep
+
+data/uploads/*
+data/sessions/*
+!data/uploads/.gitkeep
+!data/sessions/.gitkeep

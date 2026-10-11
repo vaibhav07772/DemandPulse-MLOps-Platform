@@ -1,95 +1,71 @@
-**pycache**/
+# === Python ===
+__pycache__/
 *.py[cod]
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# === Virtual environments ===
 .venv/
 venv/
-.env
-.pytest_cache/
+env/
+ENV/
+
+# === IDE / Editor ===
 .vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# === Environment files ===
+.env
+.env.local
+
+# === Testing / Linting caches ===
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# === Logs ===
 *.log
+
+# === Model cache ===
 app/pipeline/model_cache/
 
-.env
-
-# MLflow
-mlruns/
-mlartifacts/
-mlflow.db
-
-# Data
-data/uploads/*
-data/sessions/*
-!data/uploads/.gitkeep
-!data/sessions/.gitkeep
-# DVC
+# === DVC ===
 .dvc/tmp/
 .dvc/cache/
 *.tmp.dvc
 
-# Data (tracked by DVC, not Git)
+# === Data — ignored ===
 data/uploads/*
 data/sessions/*
 !data/uploads/.gitkeep
 !data/sessions/.gitkeep
+
+# === Data — tracked (sample dataset via DVC) ===
 !data/sample/
 !data/sample/**
 
-# MLflow
+# === MLflow — local only (mlruns/ folder) ===
 mlruns/
 mlartifacts/
-mlflow.db
 
-# Coverage
-coverage.xml
-.coverage
-htmlcov/
+# === MLflow SQLite DB — committed for cloud admin demo ===
+# NOTE: Uncommented intentionally so Streamlit Cloud can read it
+# mlflow.db
+# mlflow.db-journal
 
-# Ruff cache
-.ruff_cache/
+# === Prediction logs — committed for cloud admin demo ===
+# NOTE: Uncommented intentionally so Streamlit Cloud can read it
+# data/logs/
+# !data/logs/.gitkeep
 
-
-# DVC
-.dvc/tmp/
-.dvc/cache/
-*.tmp.dvc
-
-# Data (tracked by DVC, not Git)
-data/uploads/*
-data/sessions/*
-!data/uploads/.gitkeep
-!data/sessions/.gitkeep
-!data/sample/
-!data/sample/**
-
-# MLflow
-mlruns/
-mlartifacts/
-mlflow.db
-
-# Coverage
-coverage.xml
-.coverage
-htmlcov/
-
-# Ruff cache
-.ruff_cache/
-
-
-# Prediction logs (runtime-generated)
-data/logs/
-!data/logs/.gitkeep
-
-
-# MLflow
-mlruns/
-mlartifacts/
-mlflow.db
-mlflow.db-journal
-
-# Prediction logs
-data/logs/
-!data/logs/.gitkeep
-
-data/uploads/*
-data/sessions/*
-!data/uploads/.gitkeep
-!data/sessions/.gitkeep
+# === Personal reference files (not for GitHub) ===
+hinglish_readme.md

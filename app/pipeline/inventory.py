@@ -1,19 +1,11 @@
 import numpy as np
 
 
-def calculate_inventory(
-    history,
-    forecast,
-    current_stock=0,
-    lead_time_days=7,
-    safety_stock_days=3
-):
+def calculate_inventory(history, forecast, current_stock=0, lead_time_days=7, safety_stock_days=3):
     history = np.asarray(history, dtype=float)
     forecast = np.asarray(forecast, dtype=float)
 
-    avg_daily_demand = float(
-        np.mean(history[-min(30, len(history)):])
-    ) if len(history) else 0.0
+    avg_daily_demand = float(np.mean(history[-min(30, len(history)) :])) if len(history) else 0.0
 
     if avg_daily_demand <= 0:
         avg_daily_demand = float(np.mean(forecast)) if len(forecast) else 0.0
@@ -52,5 +44,5 @@ def calculate_inventory(
         "forecast_demand": round(forecast_demand, 2),
         "stock_after_forecast": round(stock_after_forecast, 2),
         "status": status,
-        "risk": risk
+        "risk": risk,
     }

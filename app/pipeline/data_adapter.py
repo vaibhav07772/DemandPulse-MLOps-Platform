@@ -4,7 +4,18 @@ import numpy as np
 import pandas as pd
 
 DATE_ALIASES = ["date", "datetime", "timestamp", "day", "week", "period", "ds", "time"]
-DEMAND_ALIASES = ["sales", "demand", "quantity", "qty", "units", "units_sold", "volume", "revenue", "target", "y"]
+DEMAND_ALIASES = [
+    "sales",
+    "demand",
+    "quantity",
+    "qty",
+    "units",
+    "units_sold",
+    "volume",
+    "revenue",
+    "target",
+    "y",
+]
 PRODUCT_ALIASES = ["product", "product_id", "sku", "item", "item_id", "article", "category"]
 STORE_ALIASES = ["store", "store_id", "location", "branch", "region", "shop"]
 PRICE_ALIASES = ["price", "unit_price", "selling_price", "sales_price"]
@@ -70,14 +81,16 @@ def adapt_dataset(path):
     date_values = pd.to_datetime(df[date_col], errors="coerce")
     quantity_values = pd.to_numeric(df[demand_col], errors="coerce")
 
-    result = pd.DataFrame({
-        "date": date_values,
-        "quantity": quantity_values,
-        "product": df[product_col].astype(str) if product_col else "TOTAL",
-        "store": df[store_col].astype(str) if store_col else "ALL",
-        "price": pd.to_numeric(df[price_col], errors="coerce") if price_col else 1.0,
-        "discount": pd.to_numeric(df[discount_col], errors="coerce") if discount_col else 0.0,
-    })
+    result = pd.DataFrame(
+        {
+            "date": date_values,
+            "quantity": quantity_values,
+            "product": df[product_col].astype(str) if product_col else "TOTAL",
+            "store": df[store_col].astype(str) if store_col else "ALL",
+            "price": pd.to_numeric(df[price_col], errors="coerce") if price_col else 1.0,
+            "discount": pd.to_numeric(df[discount_col], errors="coerce") if discount_col else 0.0,
+        }
+    )
 
     # Replace non-finite values only in numeric columns (rather than scanning the
     # entire mixed-type DataFrame).
@@ -105,7 +118,9 @@ def adapt_dataset(path):
     )
 
     if result["date"].nunique() < 3:
-        raise ValueError("Invalid dataset: at least 3 different time points are required for forecasting.")
+        raise ValueError(
+            "Invalid dataset: at least 3 different time points are required for forecasting."
+        )
 
     metadata = {
         "date_column": date_col,

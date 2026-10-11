@@ -20,3 +20,55 @@ data/uploads/*
 data/sessions/*
 !data/uploads/.gitkeep
 !data/sessions/.gitkeep
+# DVC
+.dvc/tmp/
+.dvc/cache/
+*.tmp.dvc
+
+# Data (tracked by DVC, not Git)
+data/uploads/*
+data/sessions/*
+!data/uploads/.gitkeep
+!data/sessions/.gitkeep
+!data/sample/
+!data/sample/**
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Coverage
+coverage.xml
+.coverage
+htmlcov/
+
+# Ruff cache
+.ruff_cache/
+
+
+# DVC
+.dvc/tmp/
+.dvc/cache/
+*.tmp.dvc
+
+# Data (tracked by DVC, not Git)
+data/uploads/*
+data/sessions/*
+!data/uploads/.gitkeep
+!data/sessions/.gitkeep
+!data/sample/
+!data/sample/**
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Coverage
+coverage.xml
+.coverage
+htmlcov/
+
+# Ruff cache
+.ruff_cache/

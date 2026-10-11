@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+__pycache__
+.pytest_cache
+.ruff_cache
+node_modules
+mlruns
+mlartifacts
+data/sessions
+data/uploads

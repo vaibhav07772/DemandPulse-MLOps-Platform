@@ -38,4 +38,6 @@ def create_features(df):
 
 def get_feature_columns(df):
     excluded = {"date", "quantity"}
-    return [c for c in df.columns if c not in excluded and str(df[c].dtype) not in ["object", "string"]]
+    return [
+        c for c in df.columns if c not in excluded and str(df[c].dtype) not in ["object", "string"]
+    ]

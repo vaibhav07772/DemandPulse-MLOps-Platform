@@ -1,38 +1,48 @@
-import numpy as np
+"""Time-series cross-validation splitter + schema validation entrypoint."""
+
+from __future__ import annotations
+
+import pandas as pd
+
+from app.pipeline.schema import SchemaValidationError, validate_schema
 
 
-def wape(actual, predicted):
-    actual = np.asarray(actual, dtype=float)
-    predicted = np.asarray(predicted, dtype=float)
-    denominator = np.abs(actual).sum()
-    return float(np.abs(actual - predicted).sum() / denominator * 100) if denominator else 0.0
-
-
-def mae(actual, predicted):
-    return float(np.mean(np.abs(np.asarray(actual) - np.asarray(predicted))))
-
-
-def rmse(actual, predicted):
-    return float(np.sqrt(np.mean((np.asarray(actual) - np.asarray(predicted)) ** 2)))
-
-
-def evaluate(actual, predicted):
-    return {"wape": round(wape(actual, predicted), 2), "mae": round(mae(actual, predicted), 2), "rmse": round(rmse(actual, predicted), 2)}
-
-
-def make_splits(n, folds=3):
-    if n < 12:
+def time_series_splits(n_samples: int, n_splits: int = 3, test_size: int | None = None):
+    """
+    Produce (train_end, test_start, test_end) tuples for walk-forward validation.
+    Indices are positional (0-based) on the sorted series.
+    """
+    if n_samples < n_splits + 1:
         return []
 
-    horizon = max(2, min(30, n // 5))
+    if test_size is None:
+        test_size = max(1, n_samples // (n_splits + 1))
+
     splits = []
-
-    for fold in range(folds):
-        test_end = n - ((folds - 1 - fold) * horizon)
-        test_start = test_end - horizon
-        train_end = test_start
-
-        if train_end >= 5 and test_end <= n:
-            splits.append((train_end, test_start, test_end))
+    for i in range(1, n_splits + 1):
+        train_end = n_samples - (n_splits - i + 1) * test_size
+        test_start = train_end
+        test_end = min(train_end + test_size, n_samples)
+        if train_end <= 0 or test_end <= test_start:
+            continue
+        splits.append((train_end, test_start, test_end))
 
     return splits
+
+
+def validate_dataset(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Validate an uploaded dataset against the demand schema.
+
+    Called by the upload endpoint before preprocessing.
+    Returns validated DataFrame; raises SchemaValidationError on failure.
+    """
+    required = {"date", "quantity", "product", "store", "price", "discount"}
+    missing = required.difference(data.columns)
+    if missing:
+        raise SchemaValidationError(f"Dataset is missing required columns: {sorted(missing)}")
+
+    if data.empty:
+        raise SchemaValidationError("The uploaded dataset contains no rows.")
+
+    return validate_schema(data)

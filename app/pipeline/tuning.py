@@ -4,8 +4,8 @@ import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 
-from app.mlops.mlflow_utils import log_training_run, is_enabled
-from app.pipeline.models import build_model, MODEL_CANDIDATES
+from app.mlops.mlflow_utils import is_enabled, log_training_run
+from app.pipeline.models import MODEL_CANDIDATES, build_model
 
 
 def wape(y_true, y_pred):

@@ -20,12 +20,9 @@ def prepare_data(data):
         data["discount"] = 0.0
 
     data["quantity"] = data["quantity"].clip(lower=0)
-    data = (data.groupby(["date", "product", "store"], as_index=False)
-        .agg({
-            "quantity": "sum",
-            "price": "mean",
-            "discount": "mean"
-        })
+    data = (
+        data.groupby(["date", "product", "store"], as_index=False)
+        .agg({"quantity": "sum", "price": "mean", "discount": "mean"})
         .sort_values("date")
     )
     return data
@@ -38,13 +35,13 @@ def fill_missing_dates(data):
         return data
 
     data = data.sort_values("date")
-    dates = pd.date_range(data["date"].min(),data["date"].max(), freq="D")
-    data = (data.set_index("date").reindex(dates).rename_axis("date").reset_index())
+    dates = pd.date_range(data["date"].min(), data["date"].max(), freq="D")
+    data = data.set_index("date").reindex(dates).rename_axis("date").reset_index()
     data["quantity"] = data["quantity"].fillna(0)
-    data["product"] = (data["product"].ffill().bfill().fillna("Unknown"))
-    data["store"] = (data["store"].ffill().bfill().fillna("ALL"))
-    data["price"] = (data["price"].ffill().bfill().fillna(1.0))
-    data["discount"] = (data["discount"].fillna(0))
+    data["product"] = data["product"].ffill().bfill().fillna("Unknown")
+    data["store"] = data["store"].ffill().bfill().fillna("ALL")
+    data["price"] = data["price"].ffill().bfill().fillna(1.0)
+    data["discount"] = data["discount"].fillna(0)
     return data
 
 

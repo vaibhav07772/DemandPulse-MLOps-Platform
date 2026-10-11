@@ -1,6 +1,6 @@
+from lightgbm import LGBMRegressor
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
 
 
 def build_model(name, params=None):

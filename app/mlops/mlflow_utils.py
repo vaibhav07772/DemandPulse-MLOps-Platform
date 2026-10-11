@@ -110,9 +110,7 @@ def log_training_run(
                 signature=signature,
                 input_example=X_train.head(3),
                 registered_model_name=(
-                    settings.mlflow_registered_model_name
-                    if settings.mlflow_auto_register
-                    else None
+                    settings.mlflow_registered_model_name if settings.mlflow_auto_register else None
                 ),
             )
         except Exception:

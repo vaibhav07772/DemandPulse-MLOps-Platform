@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
@@ -16,6 +16,7 @@ from app.pipeline.data_adapter import adapt_dataset
 from app.pipeline.forecasting import recursive_forecast
 from app.pipeline.inventory import calculate_inventory
 from app.pipeline.segmentation import classify_demand
+from app.pipeline.validation import validate_dataset
 from app.services.session_store import create_session, get_session
 
 # ---- Setup ----
@@ -114,21 +115,20 @@ def _normalise_all_store(store):
 def select_series(data, product=None, store=None):
     df = data.copy()
     if product:
-        df = df[df["product"].astype(str).str.strip().str.casefold()
-                == str(product).strip().casefold()]
+        df = df[
+            df["product"].astype(str).str.strip().str.casefold() == str(product).strip().casefold()
+        ]
 
     selected_store = _normalise_all_store(store)
     if selected_store:
-        df = df[df["store"].astype(str).str.strip().str.casefold()
-                == selected_store.casefold()]
+        df = df[df["store"].astype(str).str.strip().str.casefold() == selected_store.casefold()]
 
     if df.empty:
         raise ValueError("No demand history found for the selected product/store.")
 
     result = (
         df.groupby("date", as_index=False)
-        .agg(quantity=("quantity", "sum"), price=("price", "mean"),
-             discount=("discount", "mean"))
+        .agg(quantity=("quantity", "sum"), price=("price", "mean"), discount=("discount", "mean"))
         .sort_values("date")
         .reset_index(drop=True)
     )
@@ -170,12 +170,8 @@ async def upload_dataset(file: UploadFile = File(...)):
 
     try:
         data, _source_metadata = await run_in_threadpool(adapt_dataset, file_path)
-        required = {"date", "quantity", "product", "store", "price", "discount"}
-        missing = required.difference(data.columns)
-        if missing:
-            raise ValueError(f"Dataset is missing required columns: {sorted(missing)}")
-        if data.empty:
-            raise ValueError("The uploaded dataset contains no usable rows.")
+        # Schema validation (Pandera): dtypes, ranges, nulls, coercions
+        data = await run_in_threadpool(validate_dataset, data)
 
         products = sorted(data["product"].dropna().astype(str).unique().tolist())
         stores = sorted(data["store"].dropna().astype(str).unique().tolist())
@@ -193,8 +189,7 @@ async def upload_dataset(file: UploadFile = File(...)):
 
         preview = data.head(10).copy()
         preview["date"] = preview["date"].astype(str)
-        logger.info("dataset_uploaded",
-                    rows=len(data), products=len(products), stores=len(stores))
+        logger.info("dataset_uploaded", rows=len(data), products=len(products), stores=len(stores))
         return {
             "success": True,
             "session_id": session_id,
@@ -219,7 +214,9 @@ async def forecast(request: ForecastRequest):
     try:
         session = get_session(request.session_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Session expired. Please upload the dataset again.") from exc
+        raise HTTPException(
+            status_code=404, detail="Session expired. Please upload the dataset again."
+        ) from exc
 
     try:
         data = session["data"].copy()
@@ -233,17 +230,16 @@ async def forecast(request: ForecastRequest):
 
         selected_store = _normalise_all_store(store)
         if selected_store:
-            filtered = filtered[
-                filtered["store"].str.casefold() == selected_store.casefold()
-            ]
+            filtered = filtered[filtered["store"].str.casefold() == selected_store.casefold()]
 
         if filtered.empty:
             raise ValueError("No demand history found for the selected product/store.")
 
         history = (
             filtered.groupby(["date", "product", "store"], as_index=False)
-            .agg(quantity=("quantity", "sum"), price=("price", "mean"),
-                 discount=("discount", "mean"))
+            .agg(
+                quantity=("quantity", "sum"), price=("price", "mean"), discount=("discount", "mean")
+            )
             .sort_values("date")
             .reset_index(drop=True)
         )
@@ -251,18 +247,20 @@ async def forecast(request: ForecastRequest):
         if history["date"].duplicated().any():
             history = (
                 history.groupby("date", as_index=False)
-                .agg(quantity=("quantity", "sum"), price=("price", "mean"),
-                     discount=("discount", "mean"), product=("product", "first"),
-                     store=("store", "first"))
+                .agg(
+                    quantity=("quantity", "sum"),
+                    price=("price", "mean"),
+                    discount=("discount", "mean"),
+                    product=("product", "first"),
+                    store=("store", "first"),
+                )
                 .sort_values("date")
                 .reset_index(drop=True)
             )
             history["store"] = store
 
         if len(history) < 5:
-            raise ValueError(
-                f"Not enough historical data: only {len(history)} time points found."
-            )
+            raise ValueError(f"Not enough historical data: only {len(history)} time points found.")
 
         result = await run_in_threadpool(recursive_forecast, history, request.horizon)
         forecast_df = result.get("forecast")
@@ -283,9 +281,13 @@ async def forecast(request: ForecastRequest):
         history_rows = history.tail(120).copy()
         history_rows["date"] = history_rows["date"].astype(str)
 
-        logger.info("forecast_completed",
-                    product=product, store=store, horizon=request.horizon,
-                    model=result.get("model"))
+        logger.info(
+            "forecast_completed",
+            product=product,
+            store=store,
+            horizon=request.horizon,
+            model=result.get("model"),
+        )
 
         return {
             "success": True,
@@ -318,7 +320,9 @@ async def compare_products(request: CompareRequest):
     try:
         session = get_session(request.session_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Session expired. Please upload the dataset again.") from exc
+        raise HTTPException(
+            status_code=404, detail="Session expired. Please upload the dataset again."
+        ) from exc
 
     try:
         data = session["data"]
@@ -329,18 +333,19 @@ async def compare_products(request: CompareRequest):
                 raise ValueError(f"Not enough historical data for product '{product}'.")
             result = await run_in_threadpool(recursive_forecast, history, request.horizon)
             forecast_df = result["forecast"]
-            results.append({
-                "product": product,
-                "model": result.get("model"),
-                "segment": result.get("segment"),
-                "forecast": (
-                    forecast_df[["date", "forecast"]]
-                    .assign(date=lambda frame: frame["date"].astype(str))
-                    .to_dict(orient="records")
-                ),
-            })
-        logger.info("compare_completed",
-                    product1=request.product1, product2=request.product2)
+            results.append(
+                {
+                    "product": product,
+                    "model": result.get("model"),
+                    "segment": result.get("segment"),
+                    "forecast": (
+                        forecast_df[["date", "forecast"]]
+                        .assign(date=lambda frame: frame["date"].astype(str))
+                        .to_dict(orient="records")
+                    ),
+                }
+            )
+        logger.info("compare_completed", product1=request.product1, product2=request.product2)
         return {"success": True, "products": results}
     except HTTPException:
         raise
@@ -357,12 +362,16 @@ async def insights(session_id: str):
     try:
         session = get_session(session_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Session expired. Please upload the dataset again.") from exc
+        raise HTTPException(
+            status_code=404, detail="Session expired. Please upload the dataset again."
+        ) from exc
     try:
         return await run_in_threadpool(build_insights, session["data"])
     except Exception as exc:
         logger.exception("insights_failed")
-        raise HTTPException(status_code=500, detail="Unable to build insights. Check server logs.") from exc
+        raise HTTPException(
+            status_code=500, detail="Unable to build insights. Check server logs."
+        ) from exc
 
 
 def build_insights(data):

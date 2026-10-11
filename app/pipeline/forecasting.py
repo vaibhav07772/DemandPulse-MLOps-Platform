@@ -5,8 +5,8 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
-from .preprocessing import prepare_data
 from .feature_engineering import create_features
+from .preprocessing import prepare_data
 from .segmentation import classify_demand
 from .tuning import tune_models
 
@@ -50,7 +50,8 @@ def infer_frequency(dates):
 def get_feature_columns(data):
     excluded = {"date", "quantity", "product", "store", "price", "discount"}
     return [
-        col for col in data.columns
+        col
+        for col in data.columns
         if col not in excluded and pd.api.types.is_numeric_dtype(data[col])
     ]
 
@@ -157,19 +158,21 @@ def recursive_forecast(history, horizon=30):
 
     for _ in range(horizon):
         next_date = last_date + freq
-        new_row = pd.DataFrame([{
-            "date": next_date,
-            "quantity": 0.0,
-            "product": last_product,
-            "store": last_store,
-            "price": last_price,
-            "discount": last_discount,
-        }])
+        new_row = pd.DataFrame(
+            [
+                {
+                    "date": next_date,
+                    "quantity": 0.0,
+                    "product": last_product,
+                    "store": last_store,
+                    "price": last_price,
+                    "discount": last_discount,
+                }
+            ]
+        )
         temp = pd.concat([working, new_row], ignore_index=True)
         temp_features = create_features(temp)
-        X_next = temp_features.iloc[[-1]][feature_cols].replace(
-            [np.inf, -np.inf], np.nan
-        ).fillna(0)
+        X_next = temp_features.iloc[[-1]][feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0)
         prediction = max(0.0, float(model.predict(X_next)[0]))
         lower = max(0.0, prediction + trained["lower_error"])
         upper = max(prediction, prediction + trained["upper_error"])
@@ -181,12 +184,14 @@ def recursive_forecast(history, horizon=30):
         working = pd.concat([working, new_row], ignore_index=True)
         last_date = next_date
 
-    forecast_df = pd.DataFrame({
-        "date": forecast_dates,
-        "forecast": forecasts,
-        "lower": lower_bounds,
-        "upper": upper_bounds,
-    })
+    forecast_df = pd.DataFrame(
+        {
+            "date": forecast_dates,
+            "forecast": forecasts,
+            "lower": lower_bounds,
+            "upper": upper_bounds,
+        }
+    )
     best_metrics = trained["model_metrics"].get(trained["model_name"], {})
     return {
         "model": trained["model_name"],

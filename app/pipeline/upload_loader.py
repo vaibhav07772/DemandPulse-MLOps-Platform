@@ -1,6 +1,6 @@
 from pathlib import Path
-import pandas as pd
 
+import pandas as pd
 
 DATE_ALIASES = [
     "date",
@@ -52,14 +52,7 @@ HOLIDAY_ALIASES = [
 
 
 def normalize_column_name(column):
-    return (
-        str(column)
-        .strip()
-        .lower()
-        .replace(" ", "_")
-        .replace("-", "_")
-        .replace("/", "_")
-    )
+    return str(column).strip().lower().replace(" ", "_").replace("-", "_").replace("/", "_")
 
 
 def normalize_columns(df):
@@ -101,9 +94,7 @@ def load_sales_file(file_path):
         df = pd.read_excel(path)
 
     else:
-        raise ValueError(
-            "Unsupported file format. Please upload CSV or Excel (.xlsx/.xls)."
-        )
+        raise ValueError("Unsupported file format. Please upload CSV or Excel (.xlsx/.xls).")
 
     if df.empty:
         raise ValueError("The uploaded file is empty.")
@@ -128,23 +119,12 @@ def load_sales_file(file_path):
 
     result = pd.DataFrame()
 
-    result["date"] = pd.to_datetime(
-        df[date_col],
-        errors="coerce"
-    )
+    result["date"] = pd.to_datetime(df[date_col], errors="coerce")
 
-    result["quantity"] = pd.to_numeric(
-        df[demand_col],
-        errors="coerce"
-    )
+    result["quantity"] = pd.to_numeric(df[demand_col], errors="coerce")
 
     if product_col:
-        result["product"] = (
-            df[product_col]
-            .astype(str)
-            .str.strip()
-            .replace({"nan": "TOTAL"})
-        )
+        result["product"] = df[product_col].astype(str).str.strip().replace({"nan": "TOTAL"})
     else:
         result["product"] = "TOTAL"
 
@@ -153,26 +133,17 @@ def load_sales_file(file_path):
     holiday_col = find_column(df.columns, HOLIDAY_ALIASES)
 
     if price_col:
-        result["price"] = pd.to_numeric(
-            df[price_col],
-            errors="coerce"
-        )
+        result["price"] = pd.to_numeric(df[price_col], errors="coerce")
     else:
         result["price"] = 1.0
 
     if discount_col:
-        result["discount"] = pd.to_numeric(
-            df[discount_col],
-            errors="coerce"
-        )
+        result["discount"] = pd.to_numeric(df[discount_col], errors="coerce")
     else:
         result["discount"] = 0.0
 
     if holiday_col:
-        result["holiday"] = pd.to_numeric(
-            df[holiday_col],
-            errors="coerce"
-        )
+        result["holiday"] = pd.to_numeric(df[holiday_col], errors="coerce")
     else:
         result["holiday"] = 0
 
@@ -181,9 +152,7 @@ def load_sales_file(file_path):
     result = result[result["quantity"] >= 0]
 
     if result.empty:
-        raise ValueError(
-            "No valid demand records were found after cleaning."
-        )
+        raise ValueError("No valid demand records were found after cleaning.")
 
     result["product"] = result["product"].fillna("TOTAL")
 
@@ -195,14 +164,15 @@ def load_sales_file(file_path):
     result["price"] = result["price"].clip(lower=0)
 
     result = (
-        result
-        .groupby(["product", "date"], as_index=False)
-        .agg({
-            "quantity": "sum",
-            "price": "mean",
-            "discount": "mean",
-            "holiday": "max",
-        })
+        result.groupby(["product", "date"], as_index=False)
+        .agg(
+            {
+                "quantity": "sum",
+                "price": "mean",
+                "discount": "mean",
+                "holiday": "max",
+            }
+        )
         .sort_values(["product", "date"])
         .reset_index(drop=True)
     )
@@ -214,13 +184,7 @@ def get_products_from_upload(df):
     if "product" not in df.columns:
         return ["TOTAL"]
 
-    products = (
-        df["product"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
+    products = df["product"].dropna().astype(str).unique().tolist()
 
     return sorted(products)
 
@@ -232,9 +196,7 @@ def get_product_history_from_upload(df, product):
         data = df[df["product"].astype(str) == str(product)].copy()
 
     if data.empty:
-        raise ValueError(
-            f"No data found for product: {product}"
-        )
+        raise ValueError(f"No data found for product: {product}")
 
     data = data.sort_values("date").reset_index(drop=True)
 
